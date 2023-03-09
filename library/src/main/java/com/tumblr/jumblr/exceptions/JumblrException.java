@@ -1,10 +1,12 @@
 package com.tumblr.jumblr.exceptions;
 
 import com.google.gson.*;
+
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.scribe.model.Response;
+import com.github.scribejava.core.model.Response;
 
 
 /**
@@ -25,7 +27,13 @@ public class JumblrException extends RuntimeException {
      */
     public JumblrException(Response response) {
         this.responseCode = response.getCode();
-        String body = response.getBody();
+
+        String body = null;
+        try {
+            body = response.getBody();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
 
         JsonParser parser = new JsonParser();
         try {

@@ -9,7 +9,7 @@ import java.net.URLConnection;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import org.scribe.model.OAuthRequest;
+import com.github.scribejava.core.model.OAuthRequest;
 
 /**
  * Convert a OAuthRequest POST into a multi-part OAuthRequest
@@ -34,7 +34,7 @@ public class MultipartConverter {
         request.addHeader("Authorization", originalRequest.getHeaders().get("Authorization"));
         request.addHeader("Content-Type", "multipart/form-data, boundary=" + boundary);
         request.addHeader("Content-length", bodyLength.toString());
-        request.addPayload(complexPayload());
+        request.setPayload(complexPayload());
         return request;
     }
 

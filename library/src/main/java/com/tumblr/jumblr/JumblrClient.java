@@ -4,7 +4,7 @@ import com.tumblr.jumblr.request.RequestBuilder;
 import com.tumblr.jumblr.types.Blog;
 import com.tumblr.jumblr.types.Post;
 import com.tumblr.jumblr.types.User;
-import org.scribe.model.Token;
+import com.github.scribejava.core.model.OAuth1AccessToken;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -63,7 +63,7 @@ public class JumblrClient {
      * Set the token for this client.
      * @param token The token for the client.
      */
-    public void setToken(final Token token) {
+    public void setToken(final OAuth1AccessToken token) {
         this.requestBuilder.setToken(token);
     }
 

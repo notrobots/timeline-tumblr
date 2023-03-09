@@ -12,13 +12,14 @@ import java.io.File;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.util.Map;
-import org.scribe.builder.ServiceBuilder;
-import org.scribe.builder.api.TumblrApi;
-import org.scribe.model.OAuthRequest;
-import org.scribe.model.Response;
-import org.scribe.model.Token;
-import org.scribe.model.Verb;
-import org.scribe.oauth.OAuthService;
+import com.github.scribejava.core.builder.ServiceBuilder;
+import com.github.scribejava.core.model.OAuthRequest;
+import com.github.scribejava.core.model.Response;
+import com.github.scribejava.core.model.Verb;
+import com.github.scribejava.core.oauth.OAuthService;
+import com.github.scribejava.core.model.OAuth1AccessToken;
+import com.github.scribejava.core.oauth.OAuth10aService;
+import com.github.scribejava.apis.TumblrApi;
 
 /**
  * Where requests are made from
@@ -26,7 +27,7 @@ import org.scribe.oauth.OAuthService;
  */
 public class RequestBuilder {
 
-    private Token token;
+    private OAuth1AccessToken token;
     private OAuthService service;
     private String hostname = "api.tumblr.com";
     private String xauthEndpoint = "https://www.tumblr.com/oauth/access_token";
@@ -42,7 +43,14 @@ public class RequestBuilder {
         sign(request);
         boolean presetVal = HttpURLConnection.getFollowRedirects();
         HttpURLConnection.setFollowRedirects(false);
-        Response response = request.send();
+        Response response = null;
+
+        try {
+            response = service.execute(request);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
         HttpURLConnection.setFollowRedirects(presetVal);
         if (response.getCode() == 301 || response.getCode() == 302) {
             return response.getHeader("Location");
@@ -51,17 +59,29 @@ public class RequestBuilder {
         }
     }
 
-    public ResponseWrapper postMultipart(String path, Map<String, ?> bodyMap) throws IOException {
+    public ResponseWrapper postMultipart(String path, Map<String, ?> bodyMap) {
         OAuthRequest request = this.constructPost(path, bodyMap);
         sign(request);
-        OAuthRequest newRequest = RequestBuilder.convertToMultipart(request, bodyMap);
-        return clear(newRequest.send());
+        OAuthRequest newRequest;
+        Response response;
+        try {
+            newRequest = RequestBuilder.convertToMultipart(request, bodyMap);
+            response = service.execute(newRequest);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        return clear(response);
     }
 
     public ResponseWrapper post(String path, Map<String, ?> bodyMap) {
         OAuthRequest request = this.constructPost(path, bodyMap);
         sign(request);
-        return clear(request.send());
+
+        try {
+            return clear(service.execute(request));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     /**
@@ -71,11 +91,16 @@ public class RequestBuilder {
      * @param password the user's password.
      * @return the login token.
      */
-    public Token postXAuth(final String email, final String password) {
+    public OAuth1AccessToken postXAuth(final String email, final String password) {
         OAuthRequest request = constructXAuthPost(email, password);
         setToken("", ""); // Empty token is required for Scribe to execute XAuth.
         sign(request);
-        return clearXAuth(request.send());
+
+        try {
+            return clearXAuth(service.execute(request));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     // Construct an XAuth request
@@ -90,7 +115,12 @@ public class RequestBuilder {
     public ResponseWrapper get(String path, Map<String, ?> map) {
         OAuthRequest request = this.constructGet(path, map);
         sign(request);
-        return clear(request.send());
+
+        try {
+            return clear(service.execute(request));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public OAuthRequest constructGet(String path, Map<String, ?> queryParams) {
@@ -122,23 +152,28 @@ public class RequestBuilder {
     }
 
     public void setConsumer(String consumerKey, String consumerSecret) {
-        service = new ServiceBuilder().
-        provider(TumblrApi.class).
-        apiKey(consumerKey).apiSecret(consumerSecret).
-        build();
+        service = new ServiceBuilder(consumerKey)
+            .apiSecret(consumerSecret)
+            .build(TumblrApi.instance());
     }
 
     public void setToken(String token, String tokenSecret) {
-        this.token = new Token(token, tokenSecret);
+        this.token = new OAuth1AccessToken(token, tokenSecret);
     }
 
-    public void setToken(final Token token) {
+    public void setToken(final OAuth1AccessToken token) {
         this.token = token;
     }
 
     /* package-visible for testing */ ResponseWrapper clear(Response response) {
         if (response.getCode() == 200 || response.getCode() == 201) {
-            String json = response.getBody();
+            String json = null;
+            try {
+                json = response.getBody();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+
             try {
                 Gson gson = new GsonBuilder().
                         registerTypeAdapter(JsonElement.class, new JsonElementDeserializer()).
@@ -157,8 +192,14 @@ public class RequestBuilder {
         }
     }
 
-    private Token parseXAuthResponse(final Response response) {
-        String responseStr = response.getBody();
+    private OAuth1AccessToken parseXAuthResponse(final Response response) {
+        String responseStr = null;
+        try {
+            responseStr = response.getBody();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
         if (responseStr != null) {
             // Response is received in the format "oauth_token=value&oauth_token_secret=value".
             String extractedToken = null, extractedSecret = null;
@@ -174,14 +215,14 @@ public class RequestBuilder {
                 }
             }
             if (extractedToken != null && extractedSecret != null) {
-                return new Token(extractedToken, extractedSecret);
+                return new OAuth1AccessToken(extractedToken, extractedSecret);
             }
         }
         // No good
         throw new JumblrException(response);
     }
 
-    /* package-visible for testing */ Token clearXAuth(Response response) {
+    /* package-visible for testing */ OAuth1AccessToken clearXAuth(Response response) {
         if (response.getCode() == 200 || response.getCode() == 201) {
             return parseXAuthResponse(response);
         } else {
@@ -191,7 +232,7 @@ public class RequestBuilder {
 
     private void sign(OAuthRequest request) {
         if (token != null) {
-            service.signRequest(token, request);
+            ((OAuth10aService)service).signRequest(token, request);
         }
     }
 
