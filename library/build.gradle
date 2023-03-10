@@ -34,6 +34,7 @@ dependencies {
     implementation 'com.github.scribejava:scribejava-apis:8.3.3'
     implementation 'com.google.code.gson:gson:2.2.2'
     implementation 'org.apache.commons:commons-lang3:3.1'
+    implementation project(path: ':timeline-oauth:library')
     testImplementation 'junit:junit:4.11'
     testImplementation 'org.mockito:mockito-all:1.9.5'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'

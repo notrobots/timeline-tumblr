@@ -16,23 +16,24 @@ import com.github.scribejava.core.builder.ServiceBuilder;
 import com.github.scribejava.core.model.OAuthRequest;
 import com.github.scribejava.core.model.Response;
 import com.github.scribejava.core.model.Verb;
-import com.github.scribejava.core.oauth.OAuthService;
-import com.github.scribejava.core.model.OAuth1AccessToken;
-import com.github.scribejava.core.oauth.OAuth10aService;
-import com.github.scribejava.apis.TumblrApi;
+import com.github.scribejava.core.oauth.OAuth20Service;
+import dev.notrobots.timeline.oauth.OAuth2TokenStore;
+import dev.notrobots.timeline.oauth.OAuth2Token;
+import dev.notrobots.timeline.oauth.apis.TumblrApi20;
 
 /**
  * Where requests are made from
  * @author jc
  */
 public class RequestBuilder {
-
-    private OAuth1AccessToken token;
-    private OAuthService service;
+    private OAuth20Service service;
     private String hostname = "api.tumblr.com";
-    private String xauthEndpoint = "https://www.tumblr.com/oauth/access_token";
     private String version = "0.0.13";
     private final JumblrClient client;
+    private String userAgent = "jumblr/" + this.version;
+    private String callbackUrl;
+    private OAuth2TokenStore tokenStore;    //TODO: This should use a generic TokenStore
+    private OAuth2Token lastToken;
 
     public RequestBuilder(JumblrClient client) {
         this.client = client;
@@ -40,13 +41,12 @@ public class RequestBuilder {
 
     public String getRedirectUrl(String path) {
         OAuthRequest request = this.constructGet(path, null);
-        sign(request);
         boolean presetVal = HttpURLConnection.getFollowRedirects();
         HttpURLConnection.setFollowRedirects(false);
         Response response = null;
 
         try {
-            response = service.execute(request);
+            response = sendRequest(request);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -61,12 +61,11 @@ public class RequestBuilder {
 
     public ResponseWrapper postMultipart(String path, Map<String, ?> bodyMap) {
         OAuthRequest request = this.constructPost(path, bodyMap);
-        sign(request);
         OAuthRequest newRequest;
         Response response;
         try {
             newRequest = RequestBuilder.convertToMultipart(request, bodyMap);
-            response = service.execute(newRequest);
+            response = sendRequest(newRequest);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -75,49 +74,19 @@ public class RequestBuilder {
 
     public ResponseWrapper post(String path, Map<String, ?> bodyMap) {
         OAuthRequest request = this.constructPost(path, bodyMap);
-        sign(request);
 
         try {
-            return clear(service.execute(request));
+            return clear(sendRequest(request));
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-    }
-
-    /**
-     * Posts an XAuth request. A new method is needed because the response from
-     * the server is not a standard Tumblr JSON response.
-     * @param email the user's login email.
-     * @param password the user's password.
-     * @return the login token.
-     */
-    public OAuth1AccessToken postXAuth(final String email, final String password) {
-        OAuthRequest request = constructXAuthPost(email, password);
-        setToken("", ""); // Empty token is required for Scribe to execute XAuth.
-        sign(request);
-
-        try {
-            return clearXAuth(service.execute(request));
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    // Construct an XAuth request
-    private OAuthRequest constructXAuthPost(String email, String password) {
-        OAuthRequest request = new OAuthRequest(Verb.POST, xauthEndpoint);
-        request.addBodyParameter("x_auth_username", email);
-        request.addBodyParameter("x_auth_password", password);
-        request.addBodyParameter("x_auth_mode", "client_auth");
-        return request;
     }
 
     public ResponseWrapper get(String path, Map<String, ?> map) {
         OAuthRequest request = this.constructGet(path, map);
-        sign(request);
 
         try {
-            return clear(service.execute(request));
+            return clear(sendRequest(request));
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -131,7 +100,7 @@ public class RequestBuilder {
                 request.addQuerystringParameter(entry.getKey(), entry.getValue().toString());
             }
         }
-        request.addHeader("User-Agent", "jumblr/" + this.version);
+        request.addHeader("User-Agent", userAgent);
 
         return request;
     }
@@ -141,28 +110,24 @@ public class RequestBuilder {
         OAuthRequest request = new OAuthRequest(Verb.POST, url);
 
         for (Map.Entry<String, ?> entry : bodyMap.entrySet()) {
-        	String key = entry.getKey();
-        	Object value = entry.getValue();
-        	if (value == null || value instanceof File) { continue; }
-            request.addBodyParameter(key,value.toString());
+            String key = entry.getKey();
+            Object value = entry.getValue();
+            if (value == null || value instanceof File) {
+                continue;
+            }
+            request.addBodyParameter(key, value.toString());
         }
-        request.addHeader("User-Agent", "jumblr/" + this.version);
+        request.addHeader("User-Agent", userAgent);
 
         return request;
     }
 
     public void setConsumer(String consumerKey, String consumerSecret) {
         service = new ServiceBuilder(consumerKey)
-            .apiSecret(consumerSecret)
-            .build(TumblrApi.instance());
-    }
-
-    public void setToken(String token, String tokenSecret) {
-        this.token = new OAuth1AccessToken(token, tokenSecret);
-    }
-
-    public void setToken(final OAuth1AccessToken token) {
-        this.token = token;
+                .apiKey(consumerKey)
+                .apiSecret(consumerSecret)
+                .userAgent(userAgent)
+                .build(new TumblrApi20());
     }
 
     /* package-visible for testing */ ResponseWrapper clear(Response response) {
@@ -192,48 +157,18 @@ public class RequestBuilder {
         }
     }
 
-    private OAuth1AccessToken parseXAuthResponse(final Response response) {
-        String responseStr = null;
-        try {
-            responseStr = response.getBody();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-
-        if (responseStr != null) {
-            // Response is received in the format "oauth_token=value&oauth_token_secret=value".
-            String extractedToken = null, extractedSecret = null;
-            final String[] values = responseStr.split("&");
-            for (String value : values) {
-                final String[] kvp = value.split("=");
-                if (kvp != null && kvp.length == 2) {
-                    if (kvp[0].equals("oauth_token")) {
-                        extractedToken = kvp[1];
-                    } else if (kvp[0].equals("oauth_token_secret")) {
-                        extractedSecret = kvp[1];
-                    }
-                }
-            }
-            if (extractedToken != null && extractedSecret != null) {
-                return new OAuth1AccessToken(extractedToken, extractedSecret);
-            }
-        }
-        // No good
-        throw new JumblrException(response);
-    }
-
-    /* package-visible for testing */ OAuth1AccessToken clearXAuth(Response response) {
-        if (response.getCode() == 200 || response.getCode() == 201) {
-            return parseXAuthResponse(response);
-        } else {
-            throw new JumblrException(response);
-        }
-    }
-
     private void sign(OAuthRequest request) {
-        if (token != null) {
-            ((OAuth10aService)service).signRequest(token, request);
+        if (tokenStore == null) {
+            throw new RuntimeException("TokenStore was not provided");
         }
+
+        OAuth2Token token = tokenStore.fetch(client.getClientId());
+
+        if (token == null) {
+            throw new RuntimeException("Cannot sign request. Token is null");
+        }
+
+        request.addHeader("Authorization", "Bearer " + token.getAccessToken());
     }
 
     public static OAuthRequest convertToMultipart(OAuthRequest request, Map<String, ?> bodyMap) throws IOException {
@@ -246,10 +181,60 @@ public class RequestBuilder {
 
     /**
      * Set hostname without protocol
+     *
      * @param host such as "api.tumblr.com"
      */
     public void setHostname(String host) {
         this.hostname = host;
     }
 
+    /**
+     * Executes the given request and signs it with the most recent oauth2 access token.
+     *
+     * If the current token is expired it will be refreshed.
+     *
+     * @param request The request to send
+     * @return Request response
+     */
+    private Response sendRequest(OAuthRequest request) {
+        if (tokenStore == null) {
+            throw new RuntimeException("Token store was not provided");
+        }
+
+        if (lastToken == null) {
+            lastToken = tokenStore.fetch(client.getClientId());
+        }
+
+        if (lastToken.isExpired()) {
+            try {
+                lastToken = new OAuth2Token(service.refreshAccessToken(lastToken.getRefreshToken()));
+                tokenStore.store(client.getClientId(), lastToken);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        try {
+            sign(request);
+            return service.execute(request);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public String getUserAgent() {
+        return userAgent;
+    }
+
+    public void setUserAgent(String userAgent) {
+        this.userAgent = userAgent;
+    }
+
+    public OAuth2TokenStore getTokenStore() {
+        return tokenStore;
+    }
+
+    public void setTokenStore(OAuth2TokenStore tokenStore) {
+        this.tokenStore = tokenStore;
+    }
 }

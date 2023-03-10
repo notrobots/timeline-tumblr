@@ -4,13 +4,14 @@ import com.tumblr.jumblr.request.RequestBuilder;
 import com.tumblr.jumblr.types.Blog;
 import com.tumblr.jumblr.types.Post;
 import com.tumblr.jumblr.types.User;
-import com.github.scribejava.core.model.OAuth1AccessToken;
 
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import dev.notrobots.timeline.oauth.OAuth2TokenStore;
 
 /**
  * This is the base JumblrClient that is used to make requests to the Tumblr
@@ -19,9 +20,9 @@ import java.util.Map;
  * @author jc
  */
 public class JumblrClient {
-
     private RequestBuilder requestBuilder;
     private String apiKey;
+    private String clientId;
 
     public JumblrClient() {
         this.requestBuilder = new RequestBuilder(this);
@@ -31,49 +32,26 @@ public class JumblrClient {
      * Instantiate a new Jumblr Client with no token
      * @param consumerKey The consumer key for the client
      * @param consumerSecret The consumer secret for the client
+     * @param tokenStore Token store used to store and fetch the current OAuth2 access token
      */
-    public JumblrClient(String consumerKey, String consumerSecret) {
-        this();
-        this.requestBuilder.setConsumer(consumerKey, consumerSecret);
-        this.apiKey = consumerKey;
+    public JumblrClient(String consumerKey, String consumerSecret, String userAgent, OAuth2TokenStore tokenStore) {
+        this(consumerKey, consumerSecret, userAgent, tokenStore, "0");
     }
 
     /**
-     * Instantiate a new Jumblr Client
+     * Instantiate a new Jumblr Client with no token
      * @param consumerKey The consumer key for the client
      * @param consumerSecret The consumer secret for the client
-     * @param token The token for the client
-     * @param tokenSecret The token secret for the client
+     * @param tokenStore Token store used to store and fetch the current OAuth2 access token
+     * @param clientId The ID used to identify this client, can be an username or any unique string
      */
-    public JumblrClient(String consumerKey, String consumerSecret, String token, String tokenSecret) {
-        this(consumerKey, consumerSecret);
-        this.setToken(token, tokenSecret);
-    }
-
-    /**
-     * Set the token for this client
-     * @param token The token for the client
-     * @param tokenSecret The token secret for the client
-     */
-    public void setToken(String token, String tokenSecret) {
-        this.requestBuilder.setToken(token, tokenSecret);
-    }
-
-    /**
-     * Set the token for this client.
-     * @param token The token for the client.
-     */
-    public void setToken(final OAuth1AccessToken token) {
-        this.requestBuilder.setToken(token);
-    }
-
-    /**
-     * Performs an XAuth authentication.
-     * @param email the user's login email.
-     * @param password the user's login password.
-     */
-    public void xauth(final String email, final String password) {
-        setToken(this.requestBuilder.postXAuth(email, password));
+    public JumblrClient(String consumerKey, String consumerSecret, String userAgent, OAuth2TokenStore tokenStore, String clientId) {
+        this();
+        this.requestBuilder.setConsumer(consumerKey, consumerSecret);
+        this.requestBuilder.setTokenStore(tokenStore);
+        this.requestBuilder.setUserAgent(userAgent);
+        this.apiKey = consumerKey;
+        this.clientId = clientId;
     }
 
     /**
@@ -428,4 +406,7 @@ public class JumblrClient {
         return mod;
     }
 
+    public String getClientId() {
+        return clientId;
+    }
 }

@@ -16,7 +16,10 @@ dependencyResolutionManagement {
         maven {
             url = uri('https://repo.maven.apache.org/maven2/')
         }
+        maven {
+            url "https://jitpack.io"
+        }
     }
 }
 rootProject.name = "timeline-tumblr"
-include ':library'
+include ':library', ':timeline-oauth:library'
