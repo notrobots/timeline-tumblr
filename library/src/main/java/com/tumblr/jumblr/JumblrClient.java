@@ -22,11 +22,6 @@ import dev.notrobots.timeline.oauth.OAuth2TokenStore;
 public class JumblrClient {
     private RequestBuilder requestBuilder;
     private String apiKey;
-    private String clientId;
-
-    public JumblrClient() {
-        this.requestBuilder = new RequestBuilder(this);
-    }
 
     /**
      * Instantiate a new Jumblr Client with no token
@@ -34,8 +29,8 @@ public class JumblrClient {
      * @param consumerSecret The consumer secret for the client
      * @param tokenStore Token store used to store and fetch the current OAuth2 access token
      */
-    public JumblrClient(String consumerKey, String consumerSecret, String userAgent, OAuth2TokenStore tokenStore) {
-        this(consumerKey, consumerSecret, userAgent, tokenStore, "0");
+    public JumblrClient(String consumerKey, String consumerSecret, String userAgent, String callbackUrl, OAuth2TokenStore tokenStore) {
+        this(consumerKey, consumerSecret, userAgent, callbackUrl, tokenStore, "0");
     }
 
     /**
@@ -45,13 +40,21 @@ public class JumblrClient {
      * @param tokenStore Token store used to store and fetch the current OAuth2 access token
      * @param clientId The ID used to identify this client, can be an username or any unique string
      */
-    public JumblrClient(String consumerKey, String consumerSecret, String userAgent, OAuth2TokenStore tokenStore, String clientId) {
-        this();
-        this.requestBuilder.setConsumer(consumerKey, consumerSecret);
-        this.requestBuilder.setTokenStore(tokenStore);
-        this.requestBuilder.setUserAgent(userAgent);
+    public JumblrClient(String consumerKey, String consumerSecret, String userAgent, String callbackUrl, OAuth2TokenStore tokenStore, String clientId) {
+        this.requestBuilder = new RequestBuilder(this, consumerKey, consumerSecret, userAgent, callbackUrl, tokenStore, clientId);
         this.apiKey = consumerKey;
-        this.clientId = clientId;
+    }
+
+    /**
+     * Returns whether or not this client can make requests.
+     *
+     * This does not check if the token is expired, it only checks whether or not
+     * the token store has a valid token for this client.
+     *
+     * @return Whether or not the token store has a valid token for this client
+     */
+    public boolean isAuthorized() {
+        return requestBuilder.getTokenStore().getIds().contains(requestBuilder.getClientId());
     }
 
     /**
@@ -404,9 +407,5 @@ public class JumblrClient {
         Map<String, Object> mod = new HashMap<String, Object>();
         mod.putAll(map);
         return mod;
-    }
-
-    public String getClientId() {
-        return clientId;
     }
 }

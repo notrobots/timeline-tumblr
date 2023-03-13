@@ -16,7 +16,7 @@ import com.github.scribejava.core.builder.ServiceBuilder;
 import com.github.scribejava.core.model.OAuthRequest;
 import com.github.scribejava.core.model.Response;
 import com.github.scribejava.core.model.Verb;
-import com.github.scribejava.core.oauth.OAuth20Service;
+import dev.notrobots.timeline.oauth.OAuth2Client;
 import dev.notrobots.timeline.oauth.OAuth2TokenStore;
 import dev.notrobots.timeline.oauth.OAuth2Token;
 import dev.notrobots.timeline.oauth.apis.TumblrApi20;
@@ -25,17 +25,24 @@ import dev.notrobots.timeline.oauth.apis.TumblrApi20;
  * Where requests are made from
  * @author jc
  */
-public class RequestBuilder {
-    private OAuth20Service service;
+public class RequestBuilder extends OAuth2Client {
     private String hostname = "api.tumblr.com";
     private String version = "0.0.13";
     private final JumblrClient client;
     private String userAgent = "jumblr/" + this.version;
-    private String callbackUrl;
-    private OAuth2TokenStore tokenStore;    //TODO: This should use a generic TokenStore
-    private OAuth2Token lastToken;
 
-    public RequestBuilder(JumblrClient client) {
+    public RequestBuilder(JumblrClient client, String consumerKey, String consumerSecret, String userAgent, String callbackUrl, OAuth2TokenStore tokenStore, String clientId) {
+        super(
+                new ServiceBuilder(consumerKey)
+                    .apiKey(consumerKey)
+                    .apiSecret(consumerSecret)
+                    .userAgent(userAgent)
+                    .defaultScope("basic write offline_access")
+                    .callback(callbackUrl)
+                    .build(new TumblrApi20()),
+                tokenStore,
+                clientId
+        );
         this.client = client;
     }
 
@@ -122,14 +129,6 @@ public class RequestBuilder {
         return request;
     }
 
-    public void setConsumer(String consumerKey, String consumerSecret) {
-        service = new ServiceBuilder(consumerKey)
-                .apiKey(consumerKey)
-                .apiSecret(consumerSecret)
-                .userAgent(userAgent)
-                .build(new TumblrApi20());
-    }
-
     /* package-visible for testing */ ResponseWrapper clear(Response response) {
         if (response.getCode() == 200 || response.getCode() == 201) {
             String json = null;
@@ -158,11 +157,7 @@ public class RequestBuilder {
     }
 
     private void sign(OAuthRequest request) {
-        if (tokenStore == null) {
-            throw new RuntimeException("TokenStore was not provided");
-        }
-
-        OAuth2Token token = tokenStore.fetch(client.getClientId());
+        OAuth2Token token = getLastToken();
 
         if (token == null) {
             throw new RuntimeException("Cannot sign request. Token is null");
@@ -197,26 +192,9 @@ public class RequestBuilder {
      * @return Request response
      */
     private Response sendRequest(OAuthRequest request) {
-        if (tokenStore == null) {
-            throw new RuntimeException("Token store was not provided");
-        }
-
-        if (lastToken == null) {
-            lastToken = tokenStore.fetch(client.getClientId());
-        }
-
-        if (lastToken.isExpired()) {
-            try {
-                lastToken = new OAuth2Token(service.refreshAccessToken(lastToken.getRefreshToken()));
-                tokenStore.store(client.getClientId(), lastToken);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        }
-
         try {
             sign(request);
-            return service.execute(request);
+            return getAuthService().execute(request);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -224,17 +202,5 @@ public class RequestBuilder {
 
     public String getUserAgent() {
         return userAgent;
-    }
-
-    public void setUserAgent(String userAgent) {
-        this.userAgent = userAgent;
-    }
-
-    public OAuth2TokenStore getTokenStore() {
-        return tokenStore;
-    }
-
-    public void setTokenStore(OAuth2TokenStore tokenStore) {
-        this.tokenStore = tokenStore;
     }
 }
