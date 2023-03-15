@@ -12,13 +12,13 @@ import java.io.File;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.util.Map;
+
 import com.github.scribejava.core.builder.ServiceBuilder;
 import com.github.scribejava.core.model.OAuthRequest;
 import com.github.scribejava.core.model.Response;
 import com.github.scribejava.core.model.Verb;
 import dev.notrobots.timeline.oauth.OAuth2Client;
 import dev.notrobots.timeline.oauth.OAuth2TokenStore;
-import dev.notrobots.timeline.oauth.OAuth2Token;
 import dev.notrobots.timeline.oauth.apis.TumblrApi20;
 
 /**
@@ -37,7 +37,7 @@ public class RequestBuilder extends OAuth2Client {
                     .apiKey(consumerKey)
                     .apiSecret(consumerSecret)
                     .userAgent(userAgent)
-                    .defaultScope("basic write offline_access")
+                    .defaultScope("basic offline_access")
                     .callback(callbackUrl)
                     .build(new TumblrApi20()),
                 tokenStore,
@@ -156,16 +156,6 @@ public class RequestBuilder extends OAuth2Client {
         }
     }
 
-    private void sign(OAuthRequest request) {
-        OAuth2Token token = getLastToken();
-
-        if (token == null) {
-            throw new RuntimeException("Cannot sign request. Token is null");
-        }
-
-        request.addHeader("Authorization", "Bearer " + token.getAccessToken());
-    }
-
     public static OAuthRequest convertToMultipart(OAuthRequest request, Map<String, ?> bodyMap) throws IOException {
         return new MultipartConverter(request, bodyMap).getRequest();
     }
@@ -181,23 +171,6 @@ public class RequestBuilder extends OAuth2Client {
      */
     public void setHostname(String host) {
         this.hostname = host;
-    }
-
-    /**
-     * Executes the given request and signs it with the most recent oauth2 access token.
-     *
-     * If the current token is expired it will be refreshed.
-     *
-     * @param request The request to send
-     * @return Request response
-     */
-    private Response sendRequest(OAuthRequest request) {
-        try {
-            sign(request);
-            return getAuthService().execute(request);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
     }
 
     public String getUserAgent() {
