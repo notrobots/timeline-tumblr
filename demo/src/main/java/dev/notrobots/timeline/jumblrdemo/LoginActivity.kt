@@ -57,6 +57,6 @@ class LoginActivity : AppCompatActivity() {
                 }
             }
         }
-        webView.loadUrl(App.oauthService.getAuthorizationUrl(state))
+        webView.loadUrl(App.tumblr.requestBuilder.authService.getAuthorizationUrl(state))
     }
 }
