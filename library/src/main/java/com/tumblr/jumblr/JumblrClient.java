@@ -46,7 +46,7 @@ public class JumblrClient {
     }
 
     public void logout() {
-        requestBuilder.revokeAccessToken();
+        requestBuilder.logout();
     }
 
     /**
