@@ -45,16 +45,8 @@ public class JumblrClient {
         this.apiKey = consumerKey;
     }
 
-    /**
-     * Returns whether or not this client can make requests.
-     *
-     * This does not check if the token is expired, it only checks whether or not
-     * the token store has a valid token for this client.
-     *
-     * @return Whether or not the token store has a valid token for this client
-     */
-    public boolean isAuthorized() {
-        return requestBuilder.getTokenStore().getIds().contains(requestBuilder.getClientId());
+    public void logout() {
+        requestBuilder.revokeAccessToken();
     }
 
     /**
