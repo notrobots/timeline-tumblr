@@ -1,9 +1,12 @@
 package com.tumblr.jumblr;
 
+import com.github.scribejava.core.oauth.OAuth20Service;
 import com.tumblr.jumblr.request.RequestBuilder;
 import com.tumblr.jumblr.types.Blog;
 import com.tumblr.jumblr.types.Post;
 import com.tumblr.jumblr.types.User;
+
+import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -11,6 +14,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import dev.notrobots.timeline.oauth.OAuth2Config;
 import dev.notrobots.timeline.oauth.OAuth2TokenStore;
 
 /**
@@ -19,30 +23,14 @@ import dev.notrobots.timeline.oauth.OAuth2TokenStore;
  * here.
  * @author jc
  */
-public class JumblrClient {
+public class JumblrClient{
     private RequestBuilder requestBuilder;
-    private String apiKey;
 
     /**
-     * Instantiate a new Jumblr Client with no token
-     * @param consumerKey The consumer key for the client
-     * @param consumerSecret The consumer secret for the client
-     * @param tokenStore Token store used to store and fetch the current OAuth2 access token
+     * Instantiate a new Jumblr Client
      */
-    public JumblrClient(String consumerKey, String consumerSecret, String userAgent, String callbackUrl, OAuth2TokenStore tokenStore) {
-        this(consumerKey, consumerSecret, userAgent, callbackUrl, tokenStore, "0");
-    }
-
-    /**
-     * Instantiate a new Jumblr Client with no token
-     * @param consumerKey The consumer key for the client
-     * @param consumerSecret The consumer secret for the client
-     * @param tokenStore Token store used to store and fetch the current OAuth2 access token
-     * @param clientId The ID used to identify this client, can be an username or any unique string
-     */
-    public JumblrClient(String consumerKey, String consumerSecret, String userAgent, String callbackUrl, OAuth2TokenStore tokenStore, String clientId) {
-        this.requestBuilder = new RequestBuilder(this, consumerKey, consumerSecret, userAgent, callbackUrl, tokenStore, clientId);
-        this.apiKey = consumerKey;
+    public JumblrClient(@NotNull OAuth20Service authService, @NotNull OAuth2TokenStore tokenStore, OAuth2Config authConfig, @NotNull String clientId) {
+        this.requestBuilder = new RequestBuilder(this, authService, tokenStore, authConfig, clientId);
     }
 
     public void logout() {
@@ -92,7 +80,7 @@ public class JumblrClient {
             options = Collections.emptyMap();
         }
         Map<String, Object> soptions = JumblrClient.safeOptionMap(options);
-        soptions.put("api_key", apiKey);
+        soptions.put("api_key", requestBuilder.getAuthService().getApiKey());
         soptions.put("tag", tag);
         return requestBuilder.get("/tagged", soptions).getTaggedPosts();
     }
@@ -108,7 +96,7 @@ public class JumblrClient {
      */
     public Blog blogInfo(String blogName) {
         Map<String, String> map = new HashMap<String, String>();
-        map.put("api_key", this.apiKey);
+        map.put("api_key", requestBuilder.getAuthService().getApiKey());
         return requestBuilder.get(JumblrClient.blogPath(blogName, "/info"), map).getBlog();
     }
 
@@ -135,7 +123,7 @@ public class JumblrClient {
             options = Collections.emptyMap();
         }
         Map<String, Object> soptions = JumblrClient.safeOptionMap(options);
-        soptions.put("api_key", this.apiKey);
+        soptions.put("api_key", requestBuilder.getAuthService().getApiKey());
         return requestBuilder.get(JumblrClient.blogPath(blogName, "/likes"), soptions).getLikedPosts();
     }
 
@@ -154,7 +142,7 @@ public class JumblrClient {
             options = Collections.emptyMap();
         }
         Map<String, Object> soptions = JumblrClient.safeOptionMap(options);
-        soptions.put("api_key", apiKey);
+        soptions.put("api_key", requestBuilder.getAuthService().getApiKey());
 
         String path = "/posts";
         if (soptions.containsKey("type")) {
@@ -399,5 +387,9 @@ public class JumblrClient {
         Map<String, Object> mod = new HashMap<String, Object>();
         mod.putAll(map);
         return mod;
+    }
+
+    public String getClientId() {
+        return requestBuilder.getClientId();
     }
 }

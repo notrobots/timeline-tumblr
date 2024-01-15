@@ -1,5 +1,6 @@
 package com.tumblr.jumblr.request;
 
+import com.github.scribejava.core.oauth.OAuth20Service;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
@@ -17,7 +18,12 @@ import com.github.scribejava.core.builder.ServiceBuilder;
 import com.github.scribejava.core.model.OAuthRequest;
 import com.github.scribejava.core.model.Response;
 import com.github.scribejava.core.model.Verb;
+
+import org.jetbrains.annotations.NotNull;
+
 import dev.notrobots.timeline.oauth.OAuth2Client;
+import dev.notrobots.timeline.oauth.OAuth2Config;
+import dev.notrobots.timeline.oauth.OAuth2Helper;
 import dev.notrobots.timeline.oauth.OAuth2TokenStore;
 import dev.notrobots.timeline.oauth.apis.TumblrApi20;
 
@@ -27,22 +33,10 @@ import dev.notrobots.timeline.oauth.apis.TumblrApi20;
  */
 public class RequestBuilder extends OAuth2Client {
     private String hostname = "api.tumblr.com";
-    private String version = "0.0.13";
     private final JumblrClient client;
-    private String userAgent = "jumblr/" + this.version;
 
-    public RequestBuilder(JumblrClient client, String consumerKey, String consumerSecret, String userAgent, String callbackUrl, OAuth2TokenStore tokenStore, String clientId) {
-        super(
-                new ServiceBuilder(consumerKey)
-                    .apiKey(consumerKey)
-                    .apiSecret(consumerSecret)
-                    .userAgent(userAgent)
-                    .defaultScope("basic offline_access")
-                    .callback(callbackUrl)
-                    .build(new TumblrApi20()),
-                tokenStore,
-                clientId
-        );
+    public RequestBuilder(JumblrClient client, @NotNull OAuth20Service authService, @NotNull OAuth2TokenStore tokenStore, OAuth2Config authConfig, @NotNull String clientId) {
+        super(authService, tokenStore, authConfig, clientId);
         this.client = client;
     }
 
@@ -107,7 +101,7 @@ public class RequestBuilder extends OAuth2Client {
                 request.addQuerystringParameter(entry.getKey(), entry.getValue().toString());
             }
         }
-        request.addHeader("User-Agent", userAgent);
+        request.addHeader("User-Agent", getAuthConfig().getUserAgent());
 
         return request;
     }
@@ -124,7 +118,7 @@ public class RequestBuilder extends OAuth2Client {
             }
             request.addBodyParameter(key, value.toString());
         }
-        request.addHeader("User-Agent", userAgent);
+        request.addHeader("User-Agent", getAuthConfig().getUserAgent());
 
         return request;
     }
@@ -174,6 +168,6 @@ public class RequestBuilder extends OAuth2Client {
     }
 
     public String getUserAgent() {
-        return userAgent;
+        return getAuthConfig().getUserAgent();
     }
 }
